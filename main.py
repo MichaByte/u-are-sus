@@ -1,43 +1,61 @@
-from fastapi import FastAPI, Response, Request, HTTPException
-from twilio.twiml.voice_response import VoiceResponse, Gather
-from utils import validate_request
+from fastapi import FastAPI
+from twilio.twiml.voice_response import VoiceResponse
+from utils.menus import MenuActionType, Menu, MenuOption, handle_menu
+from utils.helpers import TwilioFormDataDep, twiml_response
 
+from routes import include_routers
 
 app = FastAPI()
 
-@app.post("/ivr/start")
-async def chat(request: Request):
-    if not await validate_request(request):
-        raise HTTPException(status_code=400, detail="Error in Twilio Signature")    
-    req_form = await request.form()
-    city = req_form.get("FromCity")
+include_routers(app)
 
-    # Start our TwiML response
-    resp = VoiceResponse()
+def play_hours(resp: VoiceResponse, location: str = "main") -> None:
+    """Example custom function - play business hours"""
+    resp.say(f"Our {location} office hours are Monday through Friday, 9 AM to 5 PM.")
 
-    if "Digits" in req_form:
-        # Get which digit the caller chose
-        choice = req_form.get("Digits")
-        # <Say> a different message depending on the caller's choice
-        if choice == "1":
-            resp.say("The extraterrestrial is on their way home, thank you!")
-            return Response(content=str(resp), media_type="application/xml")
-        elif choice == "2":
-            resp.say("You called a little alien stinky. How could you?")
-            resp.play("https://demo.twilio.com/docs/classic.mp3")
-            return Response(content=str(resp), media_type="application/xml")
-        else:
-            # If the caller didn't choose 1 or 2, apologize and ask them again
-            resp.say("Sorry, I don't understand that choice.")
 
-    # Read a message aloud to the caller
-    resp.say(
-        f"Hello! Micah's records indicate that an extraterrestrail is in your home city of {city}!"
+def create_main_menu() -> Menu:
+    """Factory function for main menu"""
+    return Menu(
+        intro_message="How can we help you?",
+        options=[
+            MenuOption(
+                digit=1,
+                prompt="To join a game, press 1.",
+                action_type=MenuActionType.REDIRECT,
+                action_value="/ivr/join/start",
+            ),
+            MenuOption(
+                digit=2,
+                prompt="To host a game, press 2.",
+                action_type=MenuActionType.FUNCTION,
+                action_value=play_hours,
+                action_args={"location": "main"},
+            ),
+            MenuOption(
+                digit=3,
+                prompt="To learn more about us, press 3.",
+                action_type=MenuActionType.SAY_AND_RETURN,
+                action_value=None,
+                message="We are located at 123 Main Street, San Francisco, CA.",
+            ),
+        ],
+        invalid_choice_message="Uh oh, that's not a valid option.",
+        timeout_message="Whoops, I missed that!",
     )
-    gather = Gather(num_digits=1)
-    gather.say("Press 1 to help them get home, or press 2 to call them stinky.")
-    # Play an audio file for the caller
-    resp.append(gather)
-    resp.redirect("/ivr/start")
 
-    return Response(content=str(resp), media_type="application/xml")
+
+@app.post("/ivr/start")
+async def start():
+    """Main IVR menu - initial presentation"""
+    resp = VoiceResponse()
+    resp.say(
+        "Hi there! Thank you for calling our non-infringing murder mystery game. We are so excited to have you!"
+    )
+    resp.redirect("/ivr/start/menu")
+    return twiml_response(resp)
+
+
+@app.post("/ivr/start/menu")
+async def start_menu(form_data: TwilioFormDataDep):
+    return handle_menu(create_main_menu(), form_data.digits if form_data.digits else None)
