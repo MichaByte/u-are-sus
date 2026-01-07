@@ -1,0 +1,28 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "u-are-sus"
+version = "0.0.1"
+dependencies = [
+  "twilio==9.9.0",
+  "fastapi==0.128.0"
+]
+requires-python = ">=3.13"
+authors = [
+  {name = "Micha Albert", email = "info@micha.zone"}
+]
+description = "A phone-based murder mystery that we find ourselves amongst"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICEN[CS]E.*"]
+classifiers = [
+  "Programming Language :: Python"
+]
+
+[project.urls]
+Homepage = "https://github.com/MichaByte/u-are-sus"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/u_are_sus"]
